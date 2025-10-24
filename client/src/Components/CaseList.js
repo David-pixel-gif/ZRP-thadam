@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import ViewCase from './ViewCase';
-import {Link} from 'react-router';
+import { Link } from "react-router-dom";
+
 import SimpleStorageContract from "../contracts/SimpleStorage.json";
 import getWeb3 from "../utils/getWeb3";
 

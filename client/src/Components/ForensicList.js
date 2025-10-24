@@ -1,137 +1,154 @@
-import React, { Component } from 'react';
-import ViewCase from './ViewCase';
-import {Link} from 'react-router';
-import SimpleStorageContract from "../contracts/SimpleStorage.json";
+// src/Components/ForensicList.js
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Spinner, Card, Badge, Row, Col } from "react-bootstrap";
 import getWeb3 from "../utils/getWeb3";
+import SimpleStorageContract from "../contracts/SimpleStorage.json";
+import "../CSS/forensicList.css";
 
-import '../CSS/policeList.css';
+/**
+ * @component ForensicList
+ * @description
+ * Displays a list of forensic reports from blockchain data.
+ * - Responsive Bootstrap card layout
+ * - Search filtering via props
+ * - Error & loading handling
+ */
 
-class ForensicList extends Component{
+const ForensicList = ({ search = "" }) => {
+  const [web3, setWeb3] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    state = {
-        details : [],
-        getDetailsOf: null
-    }
+  // 🔗 Load Web3 and contract instance
+  useEffect(() => {
+    const initWeb3 = async () => {
+      try {
+        const web3Instance = await getWeb3();
+        const networkId = await web3Instance.eth.net.getId();
+        const deployedNetwork = SimpleStorageContract.networks[networkId];
 
-    componentDidMount () {
-        
-    }
-
-    componentDidMount = async () => {
-        try {
-          // Get network provider and web3 instance.
-          const web3 = await getWeb3(); 
-
-          // Use web3 to get the user's accounts.
-          const accounts = await web3.eth.getAccounts();
-
-          // Get the contract instance.
-          const networkId = await web3.eth.net.getId();
-          const deployedNetwork = SimpleStorageContract.networks[networkId];
-          const instance = new web3.eth.Contract(
-            SimpleStorageContract.abi,
-            deployedNetwork && deployedNetwork.address,
-          );          
-          // Set web3, accounts, and contract to the state, and then proceed with an
-          // example of interacting with the contract's methods.
-          this.setState({ web3, accounts, contract: instance }, this.runExample);     
-          this.getVal();         
-
-
-        //   // bootstrap links
-        // const script1 = document.createElement("script");
-        // const script2 = document.createElement("script");
-        // const script3 = document.createElement("script");
-
-        // const link = document.createElement("link");
-
-        // script1.src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js";
-        // script2.src = "https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js";
-        // script3.src = "https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js";
-        // link.src = "https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css";
-        
-        // script1.async = true;
-        // script2.async = true;
-        // script3.async = true;
-        // link.async = true;
-    
-        // document.body.appendChild(script1);
-        // document.body.appendChild(script2);
-        // document.body.appendChild(script3);
-        // document.body.appendChild(link);
-
-        } catch (error) {
-          // Catch any errors for any of the above operations.
-          alert(
-            `Failed to load web3, accounts, or contract. Check console for details.`,
-          );
-          console.error(error);
-        }
-      };
-
-      getVal= async () =>{
-        const { accounts, contract } = this.state;  
-                var response2 = await contract.methods.getAllCrimeDetails().call(); 
-                this.setState({
-                    details: response2
-                }); 
-                console.log(this.state.details);             
-      };
-
-    render() {
-        var arr = [];
-        var details = this.state.details;
-        for (var key in details) {
-            arr.push(details[key]);
+        if (!deployedNetwork) {
+          throw new Error("Contract not deployed on current network.");
         }
 
-        const crimes = arr.length ?
-        (
-            arr.map(arr => 
-            {
-                var toLink = "forensicUpdate/" + arr.crime_id;
-            return (
-                <Link to = {toLink}>
+        const instance = new web3Instance.eth.Contract(
+          SimpleStorageContract.abi,
+          deployedNetwork.address
+        );
 
-                <div className = "card" key = {arr.crime_id}>
-                <div className="row listItem" >
-                        <div className="col s3 black-text">
-                            <h6>{arr.crime_id}</h6>
-                        </div>
-                        <div className="col s3 black-text ">
-                            <h6>{arr.offense_code}</h6>
-                        </div>
-                        <div className="col s3 black-text ">
-                            <h6>{arr.description}</h6>
-                        </div>
-                        <div className="col s3 black-text ">
-                            <h6>{arr.timestamp}</h6>
-                        </div>
-                    </div>
-                </div>
-                </Link>
-                )
-            })
-        ):
-        (       
-                <div className="error">
-                    <h3>No crimes!</h3>
-                </div>
-        )
+        setWeb3(web3Instance);
+        setContract(instance);
+      } catch (err) {
+        console.error(err);
+        setError("⚠️ Failed to connect to blockchain or contract.");
+      }
+    };
+    initWeb3();
+  }, []);
 
-         return(
-            <div className="notes">
-                {crimes}
-             </div>
-         )
-    }
-    clicked = (clicked) =>
-    {
-        this.setState({
-            getDetailsOf : clicked
-        })
+  // 📦 Fetch data from contract
+  useEffect(() => {
+    const fetchReports = async () => {
+      if (!contract) return;
+      try {
+        const response = await contract.methods.getAllCrimeDetails().call();
+        // Ensure proper structure (array of objects)
+        const formatted = response.map((item) => ({
+          crime_id: item.crime_id,
+          offense_code: item.offense_code,
+          description: item.description,
+          timestamp: item.timestamp,
+        }));
+        setReports(formatted);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to fetch forensic reports from blockchain.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchReports();
+  }, [contract]);
 
-    }   
-}
+  // 🔍 Filter logic
+  const filteredReports = reports.filter(
+    (r) =>
+      r.crime_id.toLowerCase().includes(search.toLowerCase()) ||
+      r.offense_code.toLowerCase().includes(search.toLowerCase()) ||
+      r.description.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // 🧾 Rendering logic
+  if (loading)
+    return (
+      <div className="text-center py-5">
+        <Spinner animation="border" variant="primary" />
+        <p className="text-muted mt-2">Loading forensic reports...</p>
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="alert alert-danger text-center my-3" role="alert">
+        {error}
+      </div>
+    );
+
+  if (filteredReports.length === 0)
+    return (
+      <div className="text-center py-4 text-muted fw-semibold">
+        No forensic records match your search.
+      </div>
+    );
+
+  return (
+    <div className="forensic-list fade-in">
+      <Row className="g-3">
+        {filteredReports.map((report, index) => (
+          <Col md={6} lg={4} key={index}>
+            <Link
+              to={`/forensics/update/${report.crime_id}`}
+              className="text-decoration-none"
+            >
+              <Card className="shadow-sm border-0 hover-card h-100">
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <h6 className="fw-bold text-primary mb-0">
+                      🧾 Crime ID: {report.crime_id}
+                    </h6>
+                    <Badge bg="info" className="px-2 py-1">
+                      {report.offense_code}
+                    </Badge>
+                  </div>
+
+                  <p className="text-muted small mb-2">
+                    {report.description || "No description provided."}
+                  </p>
+
+                  <div className="d-flex justify-content-between align-items-center mt-3">
+                    <small className="text-secondary">
+                      🕒{" "}
+                      {new Date(Number(report.timestamp) * 1000).toLocaleString(
+                        "en-GB",
+                        {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }
+                      )}
+                    </small>
+                    <Badge bg="secondary">Pending</Badge>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Link>
+          </Col>
+        ))}
+      </Row>
+    </div>
+  );
+};
 
 export default ForensicList;

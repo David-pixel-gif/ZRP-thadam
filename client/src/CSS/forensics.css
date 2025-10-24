@@ -1,20 +1,17 @@
-.forensicImage
-{
-    width: 450px;
-    height: 300px;
+/* src/CSS/viewForensic.css */
+.donate-form {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 0 15px rgba(0,0,0,0.1);
 }
-
-
-.setCardWidth {
-    width: 50%;
-  }
-  .signInCard
-  {
-      margin-left: 500px;
-  }
-
-  .cardImageHeight
-  {
-    height: 270px;
-  }
-  
+.dropbtn1 {
+  background-color: #006400;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.5rem;
+}
+.dropbtn1:hover {
+  background-color: #008000;
+}

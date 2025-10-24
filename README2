@@ -1,0 +1,19 @@
+Next Steps (Once This Contract Is Added)
+
+After deploying this improved version:
+
+Recompile via Truffle:
+
+truffle compile
+
+
+Redeploy (migration file may need update):
+
+truffle migrate --reset
+
+
+Update your frontend (AuthContext.js + Login.js) to:
+
+Call getUserRole(address) on login.
+
+Redirect users to dashboards based on their roles.

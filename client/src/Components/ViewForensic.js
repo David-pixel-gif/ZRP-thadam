@@ -1,182 +1,262 @@
-import React, { Component } from 'react';
-import ViewCaseNav from './Navbar/ViewForensic.js'
-import CrimeScenePhotographs from './CrimeScenePhotographs';
-
-import SimpleStorageContract from "../contracts/ForensicContract.json";
+// src/Components/ViewForensic.js
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Card, Button, Form, Spinner, Alert } from "react-bootstrap";
 import getWeb3 from "../utils/getWeb3";
+import ForensicContract from "../contracts/ForensicContract.json";
+import ipfs from "../ipfs";
+import "../CSS/viewForensic.css";
 
-import ipfs from '../ipfs';
+/**
+ * @component ViewForensic
+ * @description
+ * Forensic report upload form:
+ * - Uploads exhibit file to IPFS
+ * - Records metadata on blockchain (via ForensicContract)
+ * - Displays live timestamp, feedback, and validation
+ */
 
-class ViewForensic extends Component 
-{
-    state = {ipfsHash: '', buffer: null, web3: null, accounts: null, contract: null,
-               case_id: '',
-               exhibit_name: '',
-               desc:'',
-               timestamp:''
-      }; 
+const ViewForensic = () => {
+  const { caseId } = useParams();
+  const navigate = useNavigate();
 
-      constructor(props)
-      {
-        super(props);
-        this.captureFile = this.captureFile.bind(this);
-        this.onSubmit = this.onSubmit.bind(this);
-      }
+  const [web3, setWeb3] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [form, setForm] = useState({
+    case_id: caseId || "",
+    exhibit_name: "",
+    desc: "",
+    timestamp: "",
+  });
+  const [buffer, setBuffer] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState({ type: "", message: "" });
 
-      componentDidMount = async () => {
-        try {
-          // Get network provider and web3 instance.
-          const web3 = await getWeb3();           
-          // Use web3 to get the user's accounts.
-          const accounts = await web3.eth.getAccounts();      
-    
-          // Get the contract instance.
-          const networkId = await web3.eth.net.getId();
-          const deployedNetwork = SimpleStorageContract.networks[networkId];
-          const instance = new web3.eth.Contract(
-            SimpleStorageContract.abi,
-            deployedNetwork && deployedNetwork.address,
-          );
-          console.log(deployedNetwork.address);    
-          // Set web3, accounts, and contract to the state, and then proceed with an
-          // example of interacting with the contract's methods.
-          this.setState({ web3, accounts, contract: instance }, this.runExample);
-          this.onGetDate();
-        } catch (error) {
-          // Catch any errors for any of the above operations.
-          alert(
-            `Failed to load web3, accounts, or contract. Check console for details.`,
-          );
-          console.error(error);
-        }
-      };
-    
-        captureFile(event) {
-            event.preventDefault()
-            const file = event.target.files[0]
-            const reader = new window.FileReader()
-            reader.readAsArrayBuffer(file)
-            reader.onloadend = () => {
-              this.setState({ buffer: Buffer(reader.result) })
-              console.log('buffer', this.state.buffer)
-            }
-          }
-    
-          onSubmit(event) {
-            const { accounts, contract } = this.state;
-            event.preventDefault()
-            ipfs.files.add(this.state.buffer, (error, result) => {
-            if(error) 
-            {
-                console.error(error)
-                return
-            }
-            contract.methods.addReport(this.state.case_id, this.state.exhibit_name, this.state.desc, this.state.timestamp, result[0].hash).send({ from: accounts[0] });
-    
-            })        
-          }
-    
-         getVal = async () => {
-            const { accounts, contract } = this.state;
-    
-            // Get the value from the contract to prove it worked.
-            const response = await contract.methods.get().call();
-    
-            // Update state with the result.
-            this.setState({ ipfsHash: response });
-    
-             console.log("ipfsHash: " + this.state.ipfsHash);    
-          };
-    
-         getImg = async () => {
-            const { accounts, contract } = this.state;
-    
-            // Get the value from the contract to prove it worked.
-            const response = await contract.methods.get().call();
-    
-            // Update state with the result.
-            this.setState({ ipfsHash: response });
-    
-            var url = "https://ipfs.io/ipfs/"+this.state.ipfsHash;
-    
-            window.location = url;
-          };
+  // Initialize web3 + contract
+  useEffect(() => {
+    const initWeb3 = async () => {
+      try {
+        const web3Instance = await getWeb3();
+        const accounts = await web3Instance.eth.getAccounts();
+        const networkId = await web3Instance.eth.net.getId();
+        const deployedNetwork = ForensicContract.networks[networkId];
 
-    onGetDate() {
-        var date = new Date();
-        var year = date.getFullYear().toString();
-        var month = (date.getMonth() + 101).toString().substring(1);
-        var day = (date.getDate() + 100).toString().substring(1);
-        var hour = (date.getHours() + 100).toString().substring(1); 
-        var mins = (date.getMinutes() + 100).toString().substring(1);
-        var sec = (date.getSeconds() + 100).toString().substring(1);    
-        this.setState({
-            timestamp : year + "-" + month + "-" + day + " " + hour + ":" + mins + ":" + sec
+        if (!deployedNetwork)
+          throw new Error("⚠️ Contract not deployed on this network");
+
+        const instance = new web3Instance.eth.Contract(
+          ForensicContract.abi,
+          deployedNetwork.address
+        );
+
+        setWeb3(web3Instance);
+        setAccounts(accounts);
+        setContract(instance);
+        generateTimestamp();
+      } catch (err) {
+        console.error(err);
+        setFeedback({
+          type: "danger",
+          message: "Failed to connect to Web3 or blockchain contract.",
         });
-        // console.log(year + "-" + month + "-" + day + " " + hour + ":" + mins + ":" + sec);
       }
-    render()
-    {
-        var crimeId = this.props.routeParams.caseId;
-        console.log(this.props);
-        return(
-            <div>
-            <ViewCaseNav crimeId = {crimeId}/>
-            <h4 className="title-styled" style={{marginTop: "40px", marginLeft: "235px", marginBottom:"25px"}}>Upload Forensic Reports</h4>
-            <div className="container">
-            <form onSubmit={this.onSubmit} id="donateForm" className="donate-form">
-                <div className="row">
-                    <div className="col-sm-4">
-                        <div className="form-group required">
-                            <label for="report_type">CASE ID</label>
-                            <input className="form-control" readOnly value = {crimeId} type="text" id="case_id" name="case_id" placeholder="Enter product id" onChange={(evt) => { this.state.prod_id =  evt.target.value; }} required />
-                        </div>
-                    </div>
-                </div>
+    };
+    initWeb3();
+  }, []);
 
-                <div className="row">
-                    <div className="col-sm-8">
-                        <div className="form-group required">
-                            <label for="company">EXHIBIT NAME - CODE</label> 
-                            <input className="form-control" type="text" id="exhibit_name" name="exhibit_name" placeholder="Type and code of uploaded exhibit." onChange={(evt) => { this.state.prod_status =  evt.target.value; }} required />
-                        </div>
-                    </div>                    
-                </div>
+  // Generate timestamp
+  const generateTimestamp = () => {
+    const date = new Date();
+    const formatted = date
+      .toLocaleString("en-GB", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+      .replace(",", "");
+    setForm((prev) => ({ ...prev, timestamp: formatted }));
+  };
 
-                <div className="row">
-                    <div className="col-sm-8">
-                        <div className="form-group required">
-                            <label for="par_rem">DESCRIPTION</label>
-                            <input className="form-control" type="text" id="desc" name="desc" placeholder="One line description" onChange={(evt) => { this.state.authority =  evt.target.value; }} required />                                    
-                        </div>
-                    </div>
-                </div>
-                <div className="row">
-                    <div className="col-sm-8">
-                        <div className="form-group required">
-                            <label for="payment">Documents (upload in .zip or .rar format)</label>
-                            <input className="form-control" type="file" accept="application/zip,application/x-zip,application/x-zip-compressed,application/octet-stream" onChange={this.captureFile}/>
-                         </div>
-                    </div>   
-                </div>
+  // Capture uploaded file
+  const captureFile = (e) => {
+    e.preventDefault();
+    const file = e.target.files[0];
+    if (!file) return;
 
-                <div className="row">
-                    <div className="col-sm-4">
-                        <div className="form-group required">
-                            <label for="fee">TIMESTAMP</label>
-                            <input value={this.state.timestamp} className="form-control" readOnly type="text" id="timestamp" name="timestamp" onChange={(evt) => { this.state.timestamp =  evt.target.value; }} placeholder="2019-08-03 20:45" required />
-                        </div>
-                    </div>                                                              
-                    <div className="form-submit">
-                        <button type="submit" className="dropbtn1" style={{marginTop:"10px"}}>Upload to Blockchain</button>  
-                    </div>   
-                </div>                                                                                   
-            </form>     
-            </div>
-            </div>
-        )
+    const reader = new window.FileReader();
+    reader.readAsArrayBuffer(file);
+    reader.onloadend = () => {
+      setBuffer(Buffer.from(reader.result));
+      setFeedback({ type: "info", message: `📁 File ready: ${file.name}` });
+    };
+  };
 
+  // Handle input updates
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Submit to blockchain + IPFS
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setFeedback({ type: "", message: "" });
+
+    if (!buffer) {
+      setFeedback({ type: "warning", message: "Please select a file first." });
+      setLoading(false);
+      return;
     }
-}
+
+    try {
+      // Upload to IPFS
+      const result = await ipfs.files.add(buffer);
+      const ipfsHash = result[0].hash;
+      console.log("IPFS Hash:", ipfsHash);
+
+      // Record report on blockchain
+      await contract.methods
+        .addReport(
+          form.case_id,
+          form.exhibit_name,
+          form.desc,
+          form.timestamp,
+          ipfsHash
+        )
+        .send({ from: accounts[0] });
+
+      setFeedback({
+        type: "success",
+        message: `✅ Report successfully uploaded to blockchain! 
+                  IPFS Hash: ${ipfsHash}`,
+      });
+      setForm({ ...form, exhibit_name: "", desc: "" });
+      setBuffer(null);
+    } catch (err) {
+      console.error(err);
+      setFeedback({
+        type: "danger",
+        message: "❌ Failed to upload report to blockchain or IPFS.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="forensic-upload-page py-4">
+      <div className="container">
+        <Card className="shadow-lg border-0 p-4 fade-in">
+          <h4 className="fw-bold text-primary mb-3 text-center">
+            Upload Forensic Report
+          </h4>
+          <p className="text-muted text-center mb-4">
+            Submit forensic evidence and record details securely on the blockchain.
+          </p>
+
+          {feedback.message && (
+            <Alert variant={feedback.type} className="text-center">
+              {feedback.message}
+            </Alert>
+          )}
+
+          <Form onSubmit={onSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Case ID</Form.Label>
+              <Form.Control
+                type="text"
+                name="case_id"
+                value={form.case_id}
+                readOnly
+                plaintext
+                className="fw-bold"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Exhibit Name / Code</Form.Label>
+              <Form.Control
+                type="text"
+                name="exhibit_name"
+                placeholder="e.g., Bullet shell - EXH45"
+                value={form.exhibit_name}
+                onChange={handleChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Description</Form.Label>
+              <Form.Control
+                type="text"
+                name="desc"
+                placeholder="Brief description of the exhibit"
+                value={form.desc}
+                onChange={handleChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Upload Exhibit File (.zip or .rar)</Form.Label>
+              <Form.Control
+                type="file"
+                accept=".zip,.rar,application/x-zip-compressed"
+                onChange={captureFile}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Timestamp</Form.Label>
+              <Form.Control
+                type="text"
+                value={form.timestamp}
+                readOnly
+                className="fw-semibold"
+              />
+            </Form.Group>
+
+            <div className="text-center mt-4">
+              <Button
+                variant="primary"
+                type="submit"
+                className="px-4 fw-semibold"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Spinner
+                      as="span"
+                      animation="border"
+                      size="sm"
+                      role="status"
+                      aria-hidden="true"
+                      className="me-2"
+                    />
+                    Uploading...
+                  </>
+                ) : (
+                  "Upload to Blockchain"
+                )}
+              </Button>
+              <Button
+                variant="outline-secondary"
+                className="ms-3"
+                onClick={() => navigate(-1)}
+              >
+                Back
+              </Button>
+            </div>
+          </Form>
+        </Card>
+      </div>
+    </div>
+  );
+};
 
 export default ViewForensic;

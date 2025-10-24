@@ -1,0 +1,7 @@
+/* src/CSS/forensicHome.css */
+.forensic-home {
+  background: linear-gradient(135deg, #f4f6f8, #e8f0fe);
+  min-height: 100vh;
+  padding: 2rem;
+}
+    
